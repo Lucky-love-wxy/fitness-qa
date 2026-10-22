@@ -27,8 +27,10 @@ from pathlib import Path
 import llm
 
 ROOT = Path(__file__).resolve().parent
-# 逐字稿目录：环境变量 FITNESS_QA_TRANSCRIPTS，默认是同级的 video-transcribe/out
-DEFAULT_OUT = Path(os.environ.get("FITNESS_QA_TRANSCRIPTS", ROOT.parent / "video-transcribe" / "out"))
+# 逐字稿目录：环境变量 FITNESS_QA_TRANSCRIPTS > 仓库内 transcribe/out > 同级的 video-transcribe/out
+DEFAULT_OUT = Path(os.environ.get("FITNESS_QA_TRANSCRIPTS") or next(
+    (p for p in (ROOT / "transcribe" / "out", ROOT.parent / "video-transcribe" / "out") if p.is_dir()),
+    ROOT / "transcribe" / "out"))
 CARDS_CACHE = ROOT / "data" / "cards.json"
 INDEX_FILE = ROOT / "data" / "index.json"
 EXCLUDED_FILE = ROOT / "data" / "excluded.md"

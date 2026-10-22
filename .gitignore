@@ -9,3 +9,10 @@ __pycache__/
 *.pyc
 *.log
 .DS_Store
+# 转写产物与模型（逐字稿含他人内容，模型体积大）
+transcribe/out/
+transcribe/models/
+transcribe/app/build/
+# 视频号下载工具：只保留说明文档，程序、证书、数据库、下载的视频都不进仓库
+wx-channels/*
+!wx-channels/README.md

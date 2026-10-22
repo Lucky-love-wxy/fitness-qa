@@ -6,7 +6,13 @@
 - 逐字稿是语音转写，有同音错字：先让模型逐篇读一遍生成干净的「知识卡」，检索主要靠卡片，原文块用来补细节和定位时间
 - 库里没讲的直接说没讲，不用通用知识补
 
-仓库只有代码，不带任何视频或逐字稿，知识库要用你自己的资料生成。
+仓库只有代码，不带任何视频或逐字稿，知识库要用你自己的资料生成。完整链路三步，每步都能单独用：
+
+1. [下载视频号视频](wx-channels/README.md)：用开源工具 wx_channels_download（不附带，去上游下载）
+2. [批量转逐字稿](transcribe/README.md)：本机离线 whisper.cpp，输出带时间戳的 `逐字稿.md`
+3. 建库问答：本页下文
+
+已经有逐字稿的，直接从第 3 步开始。
 
 ## 环境
 - Python 3.9+
@@ -32,7 +38,7 @@ transcripts/
 [01:02] 健美式训练很吃天赋……
 ```
 
-子文件夹名就是视频标题。用 whisper / whisper.cpp 等工具转写后按这个格式落盘即可。
+子文件夹名就是视频标题。第 2 步的 `transcribe/transcribe.py` 直接输出这个格式（默认在 `transcribe/out/`，`build.py` 不加 `--out` 时优先读它）；用别的转写工具，按这个格式落盘即可。
 
 ## 用法
 ```bash
@@ -67,7 +73,7 @@ App 启动时自己拉起 `server.py`，退出时关掉。它直接读本仓库�
 | `FITNESS_QA_KEYCHAIN` | `xiaogu-deepseek` | 钥匙串条目名（`security add-generic-password -s <名字> -a deepseek -w` 存入） |
 | `FITNESS_QA_MODEL` | `deepseek-flash` | 模型名 |
 | `FITNESS_QA_BASE_URL` | `https://api.deepseek.com` | 换成其他 OpenAI 兼容接口 |
-| `FITNESS_QA_TRANSCRIPTS` | `../video-transcribe/out` | 逐字稿目录，等同 `build.py --out` |
+| `FITNESS_QA_TRANSCRIPTS` | `transcribe/out` | 逐字稿目录，等同 `build.py --out` |
 | `FITNESS_QA_PORT` | `8775` | 网页版端口 |
 
 ## 文件
