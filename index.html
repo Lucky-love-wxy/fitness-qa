@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健身问答</title>
+<style>
+/* 令牌取自 Claude/aesthetics/tokens.css 暗色组：小工具界面始终暗色，朱是唯一强调色 */
+:root {
+  --bg: #1B1A17; --raised: #22201D; --field: #24221E; --soft: #2A2824; --line: #3A3731;
+  --ink: #E9E4D8; --mute: #A59F92; --shu: #D0644C; --shu-weak: rgba(208, 100, 76, .14);
+  --r-sm: 8px; --r: 12px; --r-card: 18px; --pill: 999px;
+  --serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --sans: "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --t-fast: .18s; --t-press: .12s; --t-enter: .5s;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 15px/1.75 var(--sans); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:active { transform: scale(.96); transition: transform var(--t-press); }
+
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; height: 100vh; }
+.app.no-player { grid-template-columns: minmax(0, 1fr) 0; }
+.app.no-player .player { display: none; }
+
+/* 左栏：对话 */
+.main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+header { display: flex; align-items: baseline; gap: 14px; padding: 22px 40px 14px; border-bottom: 1px solid var(--line); }
+.brand { font: 600 20px/1 var(--serif); letter-spacing: .08em; }
+.brand::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--shu); margin-right: 10px; vertical-align: 3px; }
+.brand, .ghost { white-space: nowrap; }
+.meta { color: var(--mute); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+header .spacer { flex: 1; }
+.ghost { background: none; border: 1px solid var(--line); border-radius: var(--pill); padding: 4px 14px; font-size: 13px; color: var(--mute); transition: color var(--t-fast), border-color var(--t-fast); }
+.ghost:hover { color: var(--ink); border-color: var(--mute); }
+
+.thread { flex: 1; overflow-y: auto; padding: 8px 40px 40px; scroll-behavior: smooth; }
+.col { max-width: 760px; margin: 0 auto; }
+
+.empty { padding: 14vh 0 0; animation: enter var(--t-enter) ease both; }
+.empty h1 { font: 500 30px/1.5 var(--serif); letter-spacing: .04em; margin: 0 0 10px; }
+.empty h1 em { font-style: normal; color: var(--shu); }
+.empty p { color: var(--mute); margin: 0 0 30px; }
+.examples { display: flex; flex-wrap: wrap; gap: 10px; }
+.examples button { background: var(--raised); border: 1px solid var(--line); border-radius: var(--pill); padding: 7px 16px; font-size: 14px; transition: border-color var(--t-fast), color var(--t-fast); }
+.examples button:hover { border-color: var(--shu); color: var(--shu); }
+
+.turn { padding: 34px 0 6px; border-bottom: 1px solid var(--line); }
+.turn.enter { animation: enter var(--t-enter) ease both; }  /* 只在新提问插入时播一次；流式更新不重建这个元素，否则每个字都重播淡入 = 闪烁 */
+.turn:last-child { border-bottom: 0; }
+.q { font: 500 19px/1.6 var(--serif); margin: 0 0 16px; padding-left: 14px; border-left: 2px solid var(--shu); }
+.a p { margin: 0 0 10px; }
+.a h3 { font: 600 15px/1.6 var(--serif); margin: 18px 0 6px; color: var(--ink); }
+.a ul { margin: 0 0 10px; padding-left: 1.2em; }
+.a li { margin: 4px 0; }
+.a li::marker { color: var(--mute); }
+.a.pending::after { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--shu); margin-left: 6px; animation: blink 1s ease-in-out infinite; }
+.status { color: var(--mute); font-size: 13px; }
+.err { color: var(--shu); }
+
+/* 出处标记：答案里的 [V2 03:04] 变成可点的胶囊，点了右侧从这一秒开始放 */
+.cite { display: inline-flex; align-items: center; gap: 4px; margin: 0 2px; padding: 0 8px; height: 21px; vertical-align: 1px;
+  border: 1px solid rgba(208, 100, 76, .45); border-radius: var(--pill); background: none; color: var(--shu);
+  font: 12px/1 "SF Mono", Menlo, monospace; transition: background var(--t-fast); }
+.cite:hover, .cite.on { background: var(--shu-weak); }
+
+.sources { margin: 18px 0 10px; display: grid; gap: 8px; }
+.src { display: grid; grid-template-columns: 34px 1fr; gap: 10px; text-align: left; width: 100%; background: var(--raised);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; transition: border-color var(--t-fast); }
+.src:hover, .src.on { border-color: var(--shu); }
+.src .n { font: 12px/22px "SF Mono", Menlo, monospace; color: var(--shu); }
+.src .t { font-size: 14px; line-height: 22px; }
+.src .s { color: var(--mute); font-size: 12.5px; line-height: 1.6; margin-top: 2px; }
+details.trace { margin: 4px 0 16px; color: var(--mute); font-size: 12.5px; }
+details.trace summary { cursor: pointer; list-style: none; }
+details.trace summary::before { content: "＋ "; }
+details.trace[open] summary::before { content: "－ "; }
+details.trace div { margin-top: 6px; padding: 10px 14px; background: var(--soft); border-radius: var(--r-sm); line-height: 1.8; }
+
+/* 输入区 */
+.composer { padding: 14px 40px 22px; border-top: 1px solid var(--line); }
+.box { max-width: 760px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; background: var(--field);
+  border: 1px solid var(--line); border-radius: var(--r-card); padding: 10px 10px 10px 18px; transition: border-color var(--t-fast); }
+.box:focus-within { border-color: var(--mute); }
+textarea { flex: 1; resize: none; border: 0; outline: 0; background: none; color: var(--ink); font: 15px/1.6 var(--sans);
+  max-height: 160px; padding: 6px 0; }
+textarea::placeholder { color: var(--mute); }
+.send { flex: none; height: 38px; padding: 0 20px; border: 0; border-radius: var(--r); background: var(--shu); color: #1B1A17; font-weight: 600; }
+.send:disabled { opacity: .4; cursor: default; }
+.send.stop { background: var(--soft); color: var(--ink); }
+.hint { max-width: 760px; margin: 8px auto 0; color: var(--mute); font-size: 12px; }
+
+/* 右栏：放映 */
+.player { border-left: 1px solid var(--line); background: var(--raised); display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+.player .head { display: flex; align-items: center; padding: 22px 22px 14px; }
+.player .label { font: 600 14px/1 var(--serif); letter-spacing: .1em; color: var(--mute); flex: 1; }
+.player video { width: 100%; max-height: 62vh; background: #000; display: block; }
+.player .info { padding: 16px 22px; overflow-y: auto; }
+.player .vt { font: 500 16px/1.6 var(--serif); margin: 0 0 6px; }
+.player .at { color: var(--shu); font: 12px/1.6 "SF Mono", Menlo, monospace; margin-bottom: 10px; }
+.player .vs { color: var(--mute); font-size: 13px; line-height: 1.8; }
+.player .none { color: var(--mute); font-size: 13px; padding: 0 22px; }
+
+@keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes blink { 50% { opacity: .25; } }
+
+/* 窄窗口：放映栏改成底部浮层 */
+@media (max-width: 900px) {
+  .app, .app.no-player { grid-template-columns: 1fr; }
+  header, .thread, .composer { padding-left: 16px; padding-right: 16px; }
+  .player { position: fixed; left: 0; right: 0; bottom: 0; height: auto; max-height: 70vh; border-left: 0; border-top: 1px solid var(--line);
+    border-radius: var(--r-card) var(--r-card) 0 0; z-index: 5; }
+  .player video { max-height: 40vh; }
+}
+</style>
+</head>
+<body>
+<div class="app no-player" id="app">
+  <section class="main">
+    <header>
+      <span class="brand">健身问答</span>
+      <span class="meta" id="meta">载入中…</span>
+      <span class="spacer"></span>
+      <button class="ghost" id="newBtn" title="清空对话，开始新话题">新话题</button>
+    </header>
+    <div class="thread" id="thread"><div class="col" id="col"></div></div>
+    <div class="composer">
+      <div class="box">
+        <textarea id="input" rows="1" placeholder="问一个健身问题，比如：卧推肩膀疼怎么办"></textarea>
+        <button class="send" id="sendBtn" disabled>提问</button>
+      </div>
+      <div class="hint">回车发送，Shift + 回车换行。答案只来自视频库，点 V 编号直接从那一秒开始看。</div>
+    </div>
+  </section>
+  <aside class="player" id="player">
+    <div class="head"><span class="label">放映</span><button class="ghost" id="closePlayer">收起</button></div>
+    <video id="video" controls playsinline preload="metadata"></video>
+    <div class="info" id="pinfo"></div>
+  </aside>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const EXAMPLES = ["卧推肩膀疼怎么办", "减脂期碳水怎么安排", "推的时候手腕疼，要不要戴护腕", "卧推卡在 80 公斤上不去", "三分化恢复不过来怎么办", "增肌期应该怎么吃"];
+const STORE_KEY = "fitness-qa-turns";
+
+// 对话记录：[{q, a, sources, question, queries, error}]；history 只取问和答交给服务端
+let turns = [];
+let controller = null;
+let current = { vid: null };
+
+function load() { try { turns = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch { turns = []; } }
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(turns.slice(-30))); } catch {} }
+
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function toSec(ts) {
+  if (!ts) return 0;
+  return ts.split(":").reduce((acc, x) => acc * 60 + Number(x), 0);
+}
+
+// 一个方括号里可能有多个出处：[V1 03:04][V2 00:00] 或 [V1 03:04、V2 01:00]
+function citeHtml(inner, sources) {
+  const parts = [...inner.matchAll(/V(\d+)\s*(\d{1,2}:\d{2}(?::\d{2})?)?/g)];
+  if (!parts.length) return null;
+  return parts.map(([, n, ts]) => {
+    const ok = sources && sources[Number(n) - 1];
+    if (!ok) return `<span class="status">V${n}${ts ? " " + ts : ""}</span>`;
+    return `<button class="cite" data-n="${n}" data-t="${ts || ""}">V${n}${ts ? " " + ts : ""}</button>`;
+  }).join("");
+}
+
+function inline(text, sources) {
+  return esc(text).replace(/[\[【]([^\[\]【】]*V\d+[^\[\]【】]*)[\]】]/g, (m, inner) => citeHtml(inner, sources) ?? m);
+}
+
+// 答案是纯文本：「- 」开头是要点，「一、」开头是小标题，其余是段落
+function renderAnswer(text, sources) {
+  const out = [];
+  let list = [];
+  const flush = () => { if (list.length) { out.push(`<ul>${list.join("")}</ul>`); list = []; } };
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) { flush(); continue; }
+    const li = line.match(/^[-•·*]\s*(.*)$/);
+    if (li) { list.push(`<li>${inline(li[1], sources)}</li>`); continue; }
+    flush();
+    if (/^[一二三四五六七八九十]+、/.test(line) && line.length < 40) out.push(`<h3>${inline(line, sources)}</h3>`);
+    else out.push(`<p>${inline(line.replace(/^#+\s*/, "").replace(/\*\*/g, ""), sources)}</p>`);
+  }
+  flush();
+  return out.join("");
+}
+
+function citedNumbers(text) {
+  return [...new Set([...text.matchAll(/V(\d+)/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
+}
+
+function firstTimeOf(text, n) {
+  const m = text.match(new RegExp(`V${n}\\s*(\\d{1,2}:\\d{2}(?::\\d{2})?)`));
+  return m ? m[1] : "";
+}
+
+function turnInner(t, i, live) {
+  let h = `<div class="q">${esc(t.q)}</div>`;
+  if (t.error) h += `<div class="a"><p class="err">出错了：${esc(t.error)}</p></div>`;
+  else if (!t.a) h += `<div class="a pending"><span class="status">${t.sources ? "正在作答" : "正在检索视频库"}</span></div>`;
+  else h += `<div class="a${live ? " pending" : ""}">${renderAnswer(t.a, t.sources)}</div>`;
+  if (t.sources && t.a && !live) {
+    const nums = citedNumbers(t.a).filter((n) => t.sources[n - 1]);
+    if (nums.length) {
+      h += `<div class="sources">` + nums.map((n) => {
+        const s = t.sources[n - 1];
+        return `<button class="src" data-turn="${i}" data-n="${n}" data-t="${firstTimeOf(t.a, n)}">
+          <span class="n">V${n}</span><span><div class="t">${esc(s.title)}</div><div class="s">${esc(s.summary.slice(0, 70))}${s.summary.length > 70 ? "…" : ""}</div></span></button>`;
+      }).join("") + `</div>`;
+    }
+    h += `<details class="trace"><summary>检索过程</summary><div>改写：${esc(t.question || t.q)}<br>关键词：${esc((t.queries || []).join("　|　"))}<br>命中：${t.sources.map((s) => "V" + s.n + " " + esc(s.title)).join("；")}</div></details>`;
+  }
+  return h;
+}
+
+function turnHtml(t, i, live, cls = "") {
+  return `<div class="turn${cls ? " " + cls : ""}" data-i="${i}">${turnInner(t, i, live)}</div>`;
+}
+
+function render() {
+  const col = $("col");
+  if (!turns.length) {
+    col.innerHTML = `<div class="empty"><h1>问一句，回到视频里的<em>那一分钟</em>。</h1>
+      <p>答案只来自已转写的健身视频，每条结论标出处；库里没讲的会直说没讲。</p>
+      <div class="examples">${EXAMPLES.map((e) => `<button>${esc(e)}</button>`).join("")}</div></div>`;
+    return;
+  }
+  col.innerHTML = turns.map((t, i) => turnHtml(t, i, controller && i === turns.length - 1)).join("");
+}
+
+// 新提问：只追加一个元素（带一次性入场动画），不重建前面的对话
+function appendTurn() {
+  const i = turns.length - 1;
+  if (i === 0) $("col").innerHTML = "";  // 去掉空状态
+  $("col").insertAdjacentHTML("beforeend", turnHtml(turns[i], i, true, "enter"));
+}
+
+// 流式更新：只换这一轮元素的内部，且每帧最多一次（DeepSeek 一秒推几百个片段，逐片重排既闪又浪费）
+let frameQueued = false;
+function renderLast(final = false) {
+  const i = turns.length - 1;
+  const el = document.querySelector(`.turn[data-i="${i}"]`);
+  if (!el) return render();
+  const paint = () => {
+    const th = $("thread");
+    const nearBottom = th.scrollHeight - th.scrollTop - th.clientHeight < 120;
+    el.innerHTML = turnInner(turns[i], i, !final);
+    if (nearBottom) scrollBottom();
+  };
+  if (final) { frameQueued = false; return paint(); }
+  if (frameQueued) return;
+  frameQueued = true;
+  requestAnimationFrame(() => { if (frameQueued) { frameQueued = false; paint(); } });
+}
+
+function scrollBottom() { const th = $("thread"); th.scrollTop = th.scrollHeight; }
+
+// 右栏放映：同一条视频只跳秒数，换视频才重新载入
+function play(sources, n, ts) {
+  const s = sources && sources[n - 1];
+  if (!s) return;
+  $("app").classList.remove("no-player");
+  const v = $("video");
+  const sec = toSec(ts);
+  $("pinfo").innerHTML = `<div class="vt">V${n}　${esc(s.title)}</div><div class="at">从 ${esc(ts || "00:00")} 开始</div><div class="vs">${esc(s.summary)}</div>`;
+  if (!s.has_video) { v.removeAttribute("src"); v.load(); $("pinfo").innerHTML += `<p class="none">这条没有找到视频文件。</p>`; return; }
+  if (current.vid === s.vid) { v.currentTime = sec; v.play().catch(() => {}); return; }
+  current.vid = s.vid;
+  v.src = `/video/${s.vid}`;
+  v.onloadedmetadata = () => { v.currentTime = sec; v.play().catch(() => {}); };
+}
+
+document.addEventListener("click", (e) => {
+  const ex = e.target.closest(".examples button");
+  if (ex) { $("input").value = ex.textContent; ask(); return; }
+  const c = e.target.closest(".cite, .src");
+  if (!c) return;
+  const i = c.dataset.turn ?? c.closest(".turn")?.dataset.i;
+  const t = turns[Number(i)];
+  document.querySelectorAll(".cite.on, .src.on").forEach((x) => x.classList.remove("on"));
+  c.classList.add("on");
+  play(t && t.sources, Number(c.dataset.n), c.dataset.t);
+});
+
+$("closePlayer").onclick = () => { $("video").pause(); $("app").classList.add("no-player"); };
+$("newBtn").onclick = () => { if (controller) controller.abort(); turns = []; save(); render(); $("input").focus(); };
+
+const input = $("input");
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  if (!controller) $("sendBtn").disabled = !input.value.trim();
+});
+input.addEventListener("keydown", (e) => {
+  // 中文输入法选词时的回车不能当发送
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); ask(); }
+});
+$("sendBtn").onclick = () => (controller ? controller.abort() : ask());
+
+function setBusy(on) {
+  const b = $("sendBtn");
+  b.classList.toggle("stop", on);
+  b.textContent = on ? "停止" : "提问";
+  b.disabled = on ? false : !input.value.trim();
+}
+
+async function ask() {
+  const q = input.value.trim();
+  if (!q || controller) return;
+  input.value = ""; input.style.height = "auto";
+  const history = turns.filter((t) => t.a && !t.error).slice(-3).map((t) => [t.q, t.a]);
+  const t = { q, a: "" };
+  turns.push(t);
+  controller = new AbortController();
+  setBusy(true); appendTurn(); scrollBottom();
+  try {
+    const resp = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, history }), signal: controller.signal });
+    if (!resp.ok) throw new Error(`服务返回 ${resp.status}`);
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      // SSE 以空行分隔事件
+      let k;
+      while ((k = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, k); buf = buf.slice(k + 2);
+        const ev = (block.match(/^event: (.*)$/m) || [])[1];
+        const data = JSON.parse((block.match(/^data: (.*)$/m) || [, "{}"])[1]);
+        if (ev === "meta") { t.sources = data.sources; t.question = data.question; t.queries = data.queries; }
+        else if (ev === "delta") t.a += data.t;
+        else if (ev === "error") t.error = data.message;
+        renderLast();
+      }
+    }
+  } catch (err) {
+    if (err.name === "AbortError") { if (!t.a) t.error = "已停止"; else t.a += "\n（已停止）"; }
+    else t.error = String(err.message || err);
+  } finally {
+    controller = null;
+    setBusy(false);
+    renderLast(true);
+    save();
+  }
+}
+
+fetch("/api/state").then((r) => r.json()).then((s) => { $("meta").textContent = `${s.videos} 条健身视频 · 博主观点，不是医学建议`; })
+  .catch(() => { $("meta").textContent = "后台服务没连上"; });
+load(); render(); input.focus();
+</script>
+</body>
+</html>

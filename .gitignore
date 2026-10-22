@@ -1,0 +1,11 @@
+# 知识库数据由 build.py 从自己的逐字稿生成，不进仓库（含视频原文与本机路径）
+data/*
+!data/overrides.example.json
+# 个人设计记录与本机用法
+notes/
+# 构建产物
+mac/build/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
